@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const API = 'http://localhost:5000/api/bank';
+const API = 'https://mern-banking-application.onrender.com/api/bank';
 
 const Dashboard = () => {
   const [account, setAccount] = useState(null);

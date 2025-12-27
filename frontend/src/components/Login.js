@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const API = 'http://localhost:5000/api/auth';
+const API = 'https://mern-banking-application.onrender.com/api/auth';
 
 const Login = () => {
   const [form, setForm] = useState({ username: '', password: '' });
