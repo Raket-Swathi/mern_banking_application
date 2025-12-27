@@ -1,125 +1,160 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const BASE_URL = "https://banking-backend-xtvz.onrender.com";
+const API = 'http://localhost:5000/api/bank';
 
-function Dashboard() {
+const Dashboard = () => {
   const [account, setAccount] = useState(null);
-  const [amount, setAmount] = useState("");
   const [transactions, setTransactions] = useState([]);
+  const [depositAmount, setDepositAmount] = useState('');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const navigate = useNavigate();
+
+  const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+
+  useEffect(() => {
+    if (!token) {
+      navigate('/login');
+    } else {
+      loadAccount();
+    }
+    // eslint-disable-next-line
+  }, []);
+
+  const authHeader = () => ({
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  });
 
   const loadAccount = async () => {
-    const res = await axios.get(`${BASE_URL}/bank/accounts`);
-    setAccount(res.data[0]);
+    const res = await fetch(`${API}/accounts`, { headers: authHeader() });
+    const data = await res.json();
+    if (res.ok && data.length > 0) {
+      setAccount(data[0]);
+      loadHistory(data[0]._id);
+    }
   };
 
   const loadHistory = async (accountId) => {
-    const res = await axios.get(
-      `${BASE_URL}/bank/history/${accountId}`
-    );
-    setTransactions(res.data);
+    const res = await fetch(`${API}/history/${accountId}`, { headers: authHeader() });
+    const data = await res.json();
+    if (res.ok) setTransactions(data);
   };
 
-  useEffect(() => {
-    loadAccount();
-  }, []);
-
-  useEffect(() => {
-    if (account) {
-      loadHistory(account._id);
+  const doDeposit = async () => {
+    const amt = Number(depositAmount);
+    if (!amt || amt <= 0) return;
+    const res = await fetch(`${API}/deposit`, {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ accountId: account._id, amount: amt }),
+    });
+    if (res.ok) {
+      setDepositAmount('');
+      loadAccount();
+    } else {
+      alert('Deposit failed');
     }
-  }, [account]);
-
-  const deposit = async () => {
-    await axios.post(`${BASE_URL}/bank/deposit`, {
-      accountId: account._id,
-      amount: Number(amount),
-    });
-    setAmount("");
-    loadAccount();
-    loadHistory(account._id);
   };
 
-  const withdraw = async () => {
-    await axios.post(`${BASE_URL}/bank/withdraw`, {
-      accountId: account._id,
-      amount: Number(amount),
+  const doWithdraw = async () => {
+    const amt = Number(withdrawAmount);
+    if (!amt || amt <= 0) return;
+    const res = await fetch(`${API}/withdraw`, {
+      method: 'POST',
+      headers: authHeader(),
+      body: JSON.stringify({ accountId: account._id, amount: amt }),
     });
-    setAmount("");
-    loadAccount();
-    loadHistory(account._id);
+    const data = await res.json();
+    if (res.ok) {
+      setWithdrawAmount('');
+      loadAccount();
+    } else {
+      alert(data.error || 'Withdraw failed');
+    }
   };
 
-  if (!account) return <p className="text-center mt-4">Loading...</p>;
+  if (!account) {
+    return <div className="card">Loading your dashboard...</div>;
+  }
 
   return (
-    <div className="container mt-4">
-      <h3 className="mb-4">Dashboard</h3>
+    <div className="dashboard-wrap">
+      <div>
+        <div className="balance-box">
+          <div className="small-label">Welcome, {user?.username}</div>
+          <div className="balance-amount">₹{account.balance}</div>
+          <div className="small-label">Account: {account.accountNumber}</div>
+        </div>
 
-      <div className="card shadow-sm p-4 mb-4">
-        <h5>{account.name}</h5>
-        <h3 className="text-success">₹ {account.balance}</h3>
-        <p className="text-muted">Available Balance</p>
-      </div>
-
-      <div className="card shadow-sm p-4 mb-4">
-        <h5 className="mb-3">Transaction</h5>
-
-        <input
-          type="number"
-          className="form-control mb-3"
-          placeholder="Enter amount"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
-
-        <div className="row">
-          <div className="col-md-6">
-            <button className="btn btn-primary w-100" onClick={deposit}>
-              Deposit
-            </button>
-          </div>
-
-          <div className="col-md-6">
-            <button className="btn btn-warning w-100" onClick={withdraw}>
-              Withdraw
-            </button>
+        <div className="actions-box" style={{ marginTop: 12 }}>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: 16 }}>Actions</h3>
+          <div className="actions-grid">
+            <div>
+              <div className="small-label">Deposit amount</div>
+              <input
+                type="number"
+                className="input-small"
+                value={depositAmount}
+                onChange={(e) => setDepositAmount(e.target.value)}
+                placeholder="0.00"
+              />
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: 8, width: '100%' }}
+                onClick={doDeposit}
+              >
+                Deposit
+              </button>
+            </div>
+            <div>
+              <div className="small-label">Withdraw amount</div>
+              <input
+                type="number"
+                className="input-small"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                placeholder="0.00"
+              />
+              <button
+                className="btn btn-secondary"
+                style={{ marginTop: 8, width: '100%' }}
+                onClick={doWithdraw}
+              >
+                Withdraw
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="card shadow-sm p-4">
-        <h5 className="mb-3">Transaction History</h5>
-
-        <table className="table table-bordered">
-          <thead className="table-light">
-            <tr>
-              <th>Type</th>
-              <th>Amount</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.length === 0 ? (
-              <tr>
-                <td colSpan="3" className="text-center">
-                  No transactions found
-                </td>
-              </tr>
-            ) : (
-              transactions.map((tx) => (
-                <tr key={tx._id}>
-                  <td>{tx.type}</td>
-                  <td>₹ {tx.amount}</td>
-                  <td>{new Date(tx.time).toLocaleString()}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      <div className="history-box">
+        <h3 style={{ margin: '0 0 10px 0', fontSize: 16 }}>Transaction history</h3>
+        {transactions.length === 0 && (
+          <p className="text-muted">No transactions yet.</p>
+        )}
+        {transactions.map((t) => (
+          <div key={t._id} className="txn-row">
+            <div>
+              <div className="txn-type">{t.type}</div>
+              <div className="txn-date">
+                {new Date(t.createdAt).toLocaleString()}
+              </div>
+            </div>
+            <div
+              className={
+                'txn-amount ' +
+                (t.type === 'deposit' || t.type === 'transfer-in' ? 'in' : 'out')
+              }
+            >
+              {t.type === 'deposit' || t.type === 'transfer-in' ? '+' : '-'}₹{t.amount}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
-}
+};
 
 export default Dashboard;

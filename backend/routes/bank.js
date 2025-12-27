@@ -1,74 +1,90 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const Account = require('../models/Account');
 const Transaction = require('../models/Transaction');
 
 const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key';
+
+// auth middleware
+const auth = (req, res, next) => {
+  const header = req.headers['authorization'];
+  const token = header && header.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.userId = decoded.userId;
+    next();
+  });
+};
 
 // TEST
 router.get('/test', (req, res) => {
-  res.send("BANK ROUTE WORKING");
+  res.send('BANK ROUTE WORKING');
 });
 
-// GET ALL ACCOUNTS  ✅ ADD THIS
-router.get('/accounts', async (req, res) => {
-  const accounts = await Account.find();
+// get current user accounts
+router.get('/accounts', auth, async (req, res) => {
+  const accounts = await Account.find({ userId: req.userId });
   res.json(accounts);
 });
 
-// CREATE ACCOUNT
-router.post('/create', async (req, res) => {
-  const account = new Account({
-    name: req.body.name,
-    balance: req.body.balance
+// deposit
+router.post('/deposit', auth, async (req, res) => {
+  const { accountId, amount } = req.body;
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+  const account = await Account.findOne({ _id: accountId, userId: req.userId });
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+
+  account.balance += amount;
+  await account.save();
+
+  await new Transaction({
+    userId: req.userId,
+    accountId: account._id,
+    type: 'deposit',
+    amount
+  }).save();
+
+  res.json({ message: 'Deposit successful', balance: account.balance });
+});
+
+// withdraw
+router.post('/withdraw', auth, async (req, res) => {
+  const { accountId, amount } = req.body;
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+  const account = await Account.findOne({ _id: accountId, userId: req.userId });
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+
+  if (account.balance < amount)
+    return res.status(400).json({ error: 'Insufficient balance' });
+
+  account.balance -= amount;
+  await account.save();
+
+  await new Transaction({
+    userId: req.userId,
+    accountId: account._id,
+    type: 'withdraw',
+    amount
+  }).save();
+
+  res.json({ message: 'Withdraw successful', balance: account.balance });
+});
+
+// history
+router.get('/history/:accountId', auth, async (req, res) => {
+  const account = await Account.findOne({
+    _id: req.params.accountId,
+    userId: req.userId
   });
-  await account.save();
-  res.send("Account created successfully");
-});
+  if (!account) return res.status(404).json({ error: 'Account not found' });
 
-// DEPOSIT
-router.post('/deposit', async (req, res) => {
-  const account = await Account.findById(req.body.accountId);
-  if (!account) return res.send("Account not found");
-
-  account.balance += req.body.amount;
-  await account.save();
-
-  await new Transaction({
-    accountId: account._id,
-    type: "deposit",
-    amount: req.body.amount
-  }).save();
-
-  res.send("Deposit successful");
-});
-
-// WITHDRAW
-router.post('/withdraw', async (req, res) => {
-  const account = await Account.findById(req.body.accountId);
-  if (!account) return res.send("Account not found");
-
-  if (account.balance < req.body.amount)
-    return res.send("Insufficient balance");
-
-  account.balance -= req.body.amount;
-  await account.save();
-
-  await new Transaction({
-    accountId: account._id,
-    type: "withdraw",
-    amount: req.body.amount
-  }).save();
-
-  res.send("Withdraw successful");
-});
-
-// TRANSACTION HISTORY
-router.get('/history/:accountId', async (req, res) => {
-  const transactions = await Transaction.find({
-    accountId: req.params.accountId
-  }).sort({ time: -1 });
-
-  res.json(transactions);
+  const txns = await Transaction.find({ accountId: account._id }).sort({ createdAt: -1 });
+  res.json(txns);
 });
 
 module.exports = router;
