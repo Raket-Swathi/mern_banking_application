@@ -8,26 +8,25 @@ const bankRoutes = require('./routes/bank');
 
 const app = express();
 
-// CORS + JSON
+// ✅ Allow requests from your Render frontend
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: '*',  // simple for student project
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 app.use(express.json());
 
-// MongoDB connection
+// Mongo connection
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB connected'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
-// ✅ HEALTH CHECK (must now work)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/bank', bankRoutes);
 
