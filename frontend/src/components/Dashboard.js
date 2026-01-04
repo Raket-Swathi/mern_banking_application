@@ -1,7 +1,8 @@
+// frontend/src/components/Dashboard.js
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const API = 'https://mern-banking-application.onrender.com/api/bank'; // Your backend URL
+const API = 'https://mern-banking-application.onrender.com/api/bank';
 
 const Dashboard = () => {
   const [accounts, setAccounts] = useState([]);
@@ -13,7 +14,6 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
 
   useEffect(() => {
     if (!token) {
@@ -21,6 +21,7 @@ const Dashboard = () => {
     } else {
       loadAccounts();
     }
+    // eslint-disable-next-line
   }, []);
 
   const authHeader = () => ({
@@ -28,39 +29,43 @@ const Dashboard = () => {
     'Content-Type': 'application/json',
   });
 
-  // ✅ CRUD: READ ALL ACCOUNTS
+  // READ – all accounts
   const loadAccounts = async () => {
     const res = await fetch(`${API}/accounts`, { headers: authHeader() });
     const data = await res.json();
     if (res.ok) {
       setAccounts(data);
       if (data.length > 0) {
-        setSelectedAccount(data[0]);
-        loadHistory(data[0]._id);
+        const first = data[0];
+        setSelectedAccount(first);
+        loadHistory(first._id);
+      } else {
+        setSelectedAccount(null);
+        setTransactions([]);
       }
     }
   };
 
-  // ✅ CRUD: READ TRANSACTIONS
+  // READ – transactions
   const loadHistory = async (accountId) => {
     const res = await fetch(`${API}/history/${accountId}`, { headers: authHeader() });
     const data = await res.json();
     if (res.ok) setTransactions(data);
   };
 
-  // ✅ CRUD: CREATE NEW ACCOUNT
+  // CREATE – new account
   const createAccount = async () => {
     const res = await fetch(`${API}/accounts`, {
       method: 'POST',
       headers: authHeader(),
     });
     if (res.ok) {
-      alert('New account created!');
+      alert('New account created');
       loadAccounts();
     }
   };
 
-  // ✅ CRUD: UPDATE ACCOUNT BALANCE
+  // UPDATE – change balance
   const updateBalance = async () => {
     if (!newBalance || !selectedAccount) return;
     const res = await fetch(`${API}/accounts/${selectedAccount._id}`, {
@@ -69,25 +74,26 @@ const Dashboard = () => {
       body: JSON.stringify({ balance: parseFloat(newBalance) }),
     });
     if (res.ok) {
-      alert('Balance updated!');
+      alert('Balance updated');
+      setNewBalance('');
       loadAccounts();
     }
   };
 
-  // ✅ CRUD: DELETE ACCOUNT
+  // DELETE – remove account
   const deleteAccount = async (accountId) => {
-    if (!confirm('Delete this account?')) return;
+    if (!window.confirm('Delete this account?')) return;
     const res = await fetch(`${API}/accounts/${accountId}`, {
       method: 'DELETE',
       headers: authHeader(),
     });
     if (res.ok) {
-      alert('Account deleted!');
+      alert('Account deleted');
       loadAccounts();
     }
   };
 
-  // DEPOSIT
+  // CREATE – deposit transaction
   const doDeposit = async () => {
     const amt = Number(depositAmount);
     if (!amt || !selectedAccount) return;
@@ -98,11 +104,12 @@ const Dashboard = () => {
     });
     if (res.ok) {
       setDepositAmount('');
-      loadAccounts();
+      await loadAccounts();
+      await loadHistory(selectedAccount._id);
     }
   };
 
-  // WITHDRAW
+  // CREATE – withdraw transaction
   const doWithdraw = async () => {
     const amt = Number(withdrawAmount);
     if (!amt || !selectedAccount) return;
@@ -114,40 +121,60 @@ const Dashboard = () => {
     const data = await res.json();
     if (res.ok) {
       setWithdrawAmount('');
-      loadAccounts();
+      await loadAccounts();
+      await loadHistory(selectedAccount._id);
     } else {
       alert(data.error || 'Withdraw failed');
     }
   };
 
+  // DELETE – one transaction
+  const handleDeleteTransaction = async (txnId) => {
+    if (!window.confirm('Delete this transaction?')) return;
+    const res = await fetch(`${API}/transactions/${txnId}`, {
+      method: 'DELETE',
+      headers: authHeader(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setTransactions((prev) => prev.filter((t) => t._id !== txnId));
+    } else {
+      alert(data.error || `Failed to delete transaction (${res.status})`);
+    }
+  };
+
   if (!accounts.length) {
-    return <div className="card">Loading...</div>;
+    return <div className="card">No accounts yet – click CREATE to add one.</div>;
   }
 
   return (
     <div className="dashboard-wrap">
       <div>
-        {/* ✅ ACCOUNTS CRUD SECTION */}
+        {/* ACCOUNTS CRUD SECTION */}
         <div className="balance-box">
-          <h3 style={{ margin: '0 0 12px 0' }}>Accounts (CRUD Demo)</h3>
-          
-          {/* Account List + Select */}
-          <select 
-            className="input" 
+          <h3 style={{ margin: '0 0 12px 0' }}>Accounts (CRUD)</h3>
+
+          {/* READ + SELECT */}
+          <select
+            className="input"
+            value={selectedAccount ? selectedAccount._id : ''}
             onChange={(e) => {
-              const acc = accounts.find(a => a._id === e.target.value);
-              setSelectedAccount(acc);
-              loadHistory(acc._id);
+              const acc = accounts.find((a) => a._id === e.target.value);
+              if (acc) {
+                setSelectedAccount(acc);
+                loadHistory(acc._id);
+              }
             }}
             style={{ marginBottom: 12 }}
           >
-            {accounts.map(acc => (
+            {accounts.map((acc) => (
               <option key={acc._id} value={acc._id}>
                 {acc.accountNumber} - ₹{acc.balance}
               </option>
             ))}
           </select>
 
+          {/* UPDATE + CREATE */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
             <input
               className="input"
@@ -156,22 +183,26 @@ const Dashboard = () => {
               onChange={(e) => setNewBalance(e.target.value)}
               style={{ flex: 1 }}
             />
-            <button className="btn btn-primary" onClick={updateBalance}>UPDATE</button>
-            <button className="btn btn-secondary" onClick={createAccount}>CREATE</button>
+            <button className="btn btn-primary" onClick={updateBalance}>
+              UPDATE
+            </button>
+            <button className="btn btn-secondary" onClick={createAccount}>
+              CREATE
+            </button>
           </div>
 
-          {/* Current Selected Account */}
+          {/* DELETE */}
           {selectedAccount && (
             <div>
               <div className="balance-amount">₹{selectedAccount.balance}</div>
               <div className="balance-account">{selectedAccount.accountNumber}</div>
-              <button 
-                className="btn" 
-                style={{ 
-                  background: '#e53e3e', 
-                  color: 'white', 
-                  marginTop: 8, 
-                  width: '100%' 
+              <button
+                className="btn"
+                style={{
+                  background: '#e53e3e',
+                  color: 'white',
+                  marginTop: 8,
+                  width: '100%',
                 }}
                 onClick={() => deleteAccount(selectedAccount._id)}
               >
@@ -181,9 +212,9 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Quick Actions */}
+        {/* TRANSACTION CREATE */}
         <div className="actions-box" style={{ marginTop: 12 }}>
-          <h3 style={{ margin: '0 0 12px 0' }}>Quick Actions</h3>
+          <h3 style={{ margin: '0 0 12px 0' }}>Transactions (Create)</h3>
           <div className="actions-grid">
             <div>
               <div className="small-label">Deposit</div>
@@ -193,7 +224,11 @@ const Dashboard = () => {
                 onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="Amount"
               />
-              <button className="btn btn-primary" style={{ marginTop: 8, width: '100%' }} onClick={doDeposit}>
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: 8, width: '100%' }}
+                onClick={doDeposit}
+              >
                 Deposit
               </button>
             </div>
@@ -205,7 +240,11 @@ const Dashboard = () => {
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 placeholder="Amount"
               />
-              <button className="btn btn-secondary" style={{ marginTop: 8, width: '100%' }} onClick={doWithdraw}>
+              <button
+                className="btn btn-secondary"
+                style={{ marginTop: 8, width: '100%' }}
+                onClick={doWithdraw}
+              >
                 Withdraw
               </button>
             </div>
@@ -213,9 +252,9 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Transactions */}
+      {/* TRANSACTIONS READ */}
       <div className="history-box">
-        <h3 style={{ margin: '0 0 12px 0' }}>Transactions (Auto-created)</h3>
+        <h3 style={{ margin: '0 0 12px 0' }}>Transactions (Read)</h3>
         {transactions.length === 0 ? (
           <p className="text-muted">No transactions yet</p>
         ) : (
@@ -223,10 +262,25 @@ const Dashboard = () => {
             <div key={t._id} className="txn-row">
               <div>
                 <div className="txn-type">{t.type}</div>
-                <div className="txn-date">{new Date(t.createdAt).toLocaleString()}</div>
+                <div className="txn-date">
+                  {new Date(t.createdAt).toLocaleString()}
+                </div>
               </div>
-              <div className={`txn-amount ${t.type === 'deposit' ? 'in' : 'out'}`}>
-                {t.type === 'deposit' ? '+' : '-'}₹{t.amount}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  className={`txn-amount ${
+                    t.type === 'deposit' ? 'in' : 'out'
+                  }`}
+                >
+                  {t.type === 'deposit' ? '+' : '-'}₹{t.amount}
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: '4px 8px', fontSize: 12 }}
+                  onClick={() => handleDeleteTransaction(t._id)}
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ))
